@@ -103,12 +103,14 @@ Apache doesn't have a simple switch, but you can use `mod_rewrite` to check for 
 </IfModule>
 ```
 
-PLEASE NOTE: This may not be enough to make it work with WP Rocket or similar caching tools! Please refer to their configuration to see how you can adjust it to work with `brotli` pre-compressed files!
-
 ## **Known Limitations**
 
 * **Plugin Compatibility:** Tested primarily with **WP Rocket**. Also works with WP Fastest Cache and others that store static files on disk.  
 * **Stale Cache Edge Case:** If a caching plugin deletes *only* the source file (e.g., `index.html`) but leaves the `.br` file (rare, as most delete the folder), the webserver might serve the stale `.br` file until the cache is regenerated. With WP Rocket, this is not an issue as it clears directory-based structures.
+
+## **Different uses**
+
+It shall be known that auto-brotli can be "abused" to brotli-fy other files too. All you would have to do is change the `WEB_ROOT` and adjust `CACHE_PATH_PATTERN`. You can use `*` as the `CACHE_PATH_PATTERN` if you have no preferences or restrictions on where to look inside `WEB_ROOT`. You can create a second copy of the script if you want both functions.
 
 ## **License**
 
