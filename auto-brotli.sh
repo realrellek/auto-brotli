@@ -56,11 +56,21 @@ find "$WEB_ROOT" \
         -o -name "*.htm" \
         -o -name "*.xml" \
         -o -name "*.rss-xml" \
+        -o -name "*.json" \
+        -o -name "*.svg" \
+        -o -name "*.map" \
+        -o -name "*.ttf" \
+        -o -name "*.eot" \
+        -o -name "*.otf" \
+        -o -name "*.txt" \
     \) \
     $TIME_FILTER \
     ! -name "*.br" \
     ! -name "*.gz" \
     ! -name "*.html_gz" \
+    ! -name "*.svgz" \
+    ! -name "*.woff" \
+    ! -name "*.woff2" \
     -print0 | while IFS= read -r -d '' file; do
 
     br_file="${file}.br"
