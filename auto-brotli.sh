@@ -71,12 +71,16 @@ find "$WEB_ROOT" \
     ! -name "*.svgz" \
     ! -name "*.woff" \
     ! -name "*.woff2" \
-    -print0 | while IFS= read -r -d '' file; do
+    -print0 2>/dev/null | while IFS= read -r -d '' file; do
+
+    if [ ! -f "$file" ]; then
+        continue
+    fi
 
     br_file="${file}.br"
     do_compress=false
 
-    # if no .br exist, we have to make one
+    # if no .br exists, we have to make one
     if [ ! -f "$br_file" ]; then
         do_compress=true
     else
@@ -87,13 +91,15 @@ find "$WEB_ROOT" \
     fi
 
     if [ "$do_compress" = true ]; then
-        $BROTLI_CMD --best -f -k "$file" > /dev/null 2>&1
+        if [ -f "$file" ]; then
+            $BROTLI_CMD --best -f -k "$file" > /dev/null 2>&1
 
-        if [ -f "$br_file" ]; then
-            # Set ownership and modes and mtime to the original file
-            chown --reference="$file" "$br_file"
-            chmod --reference="$file" "$br_file"
-            touch -r "$file" "$br_file"
+            if [ -f "$br_file" ]; then
+                # Set ownership and modes and mtime to the original file
+                chown --reference="$file" "$br_file"
+                chmod --reference="$file" "$br_file"
+                touch -r "$file" "$br_file"
+            fi
         fi
     fi
 
