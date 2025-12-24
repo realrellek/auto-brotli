@@ -108,7 +108,36 @@ Apache doesn't have a simple switch, but you can use `mod_rewrite` to check for 
 * **Plugin Compatibility:** Tested primarily with **WP Rocket**. Also works with WP Fastest Cache and others that store static files on disk.  
 * **Stale Cache Edge Case:** If a caching plugin deletes *only* the source file (e.g., `index.html`) but leaves the `.br` file (rare, as most delete the folder), the webserver might serve the stale `.br` file until the cache is regenerated. With WP Rocket, this is not an issue as it clears directory-based structures.
 
-## **Different uses**
+## **Known issues**
+
+If you are using **WP Rocket** and clear the home page cache, WP Rocket does **not** remove Brotli (`.br`) files when the home page cache is **not stored in a separate directory**.
+As a result, stale Brotli files may remain in place.
+
+You can fix this by hooking into the relevant WP Rocket action. Add the following code to your theme’s `functions.php` (or any other appropriate location, e.g. a plugin or mu-plugin):
+
+```php
+add_action( 'after_rocket_clean_home', 'rellek_wpr_remove_home_br', 10, 2 );
+
+function rellek_wpr_remove_home_br( $root, $lang ) {
+	if ( ! function_exists( 'rocket_direct_filesystem' ) ) {
+		return;
+	}
+
+	$files = glob( $root . '/*.br', GLOB_NOSORT );
+
+	if ( ! $files ) {
+		return;
+	}
+
+	foreach ( $files as $file ) {
+		if ( preg_match( '#/index(?:-.+\.|\.)html(?:_gzip)?\.br$#', $file ) ) {
+			rocket_direct_filesystem()->delete( $file );
+		}
+	}
+}
+```
+
+**Different uses**
 
 It shall be known that auto-brotli can be "abused" to brotli-fy other files too. All you would have to do is change the `WEB_ROOT` and adjust `CACHE_PATH_PATTERN`. You can use `*` as the `CACHE_PATH_PATTERN` if you have no preferences or restrictions on where to look inside `WEB_ROOT`. You can create a second copy of the script if you want both functions.
 
