@@ -1,96 +1,165 @@
-# **Auto-Brotli Static Compressor**
+# auto-brotli
 
-**A set-and-forget shell script to generate pre-compressed Brotli (`.br`) files for WordPress caches.**
+auto-brotli is a set-and-forget shell script that generates **pre-compressed Brotli (`.br`) files**
+for static WordPress cache files.
 
-This script monitors your `wp-content/cache` directory and automatically generates maximum-compression Brotli files (Level 11) for your static assets (HTML, CSS, JS, XML).
+It exists to solve one specific problem:
 
-This allows Nginx (`brotli_static on;`) and Apache to serve pre-compressed files with zero CPU overhead, drastically reducing Time-To-First-Byte (TTFB) compared to on-the-fly compression.
+> **Brotli compression is expensive and should not be done on the fly.**
 
-## **Features**
+Instead of compressing responses at request time, auto-brotli pre-compresses
+static cache files so your webserver can serve them instantly with zero CPU overhead.
 
-* 🚀 **Max Compression:** Uses Brotli Quality 11 (smaller than Gzip and on-the-fly Brotli).  
-* 🔄 **Incremental:** Only processes new or modified files.  
-* 🛡️ **Self-Healing:** Syncs timestamps with source files. If the cache is updated, the `.br` file is updated.  
-* 📉 **Low Resource:** Designed to run via Cron with lowest CPU/IO priority (`nice`/`ionice`).  
-* 🧹 **Cleaner Compatible:** Preserves file ownership and modification times, so cache cleaners (like WP Rocket's garbage collector) work as expected.
+---
 
-## **Requirements**
+## Why does this exist?
 
-* Linux Server (Debian/Ubuntu/CentOS etc.)  
-* `brotli` command line tool installed:  
-  * Debian/Ubuntu: `apt install brotli`
-  * RHEL/CentOS: `yum install brotli`
+Modern caching plugins (WP Rocket, WP Fastest Cache, etc.) already generate static
+HTML, CSS, JS, XML files on disk.
 
-## **Installation**
+On-the-fly Brotli compression:
+- is CPU intensive
+- does not scale well under load
+- increases TTFB during traffic spikes
 
-1. **Download the script:**
-```
+Pre-compressed Brotli files:
+- cost CPU **once**
+- are served instantly
+- scale perfectly
+
+auto-brotli bridges that gap by continuously keeping `.br` files in sync with your cache.
+
+---
+
+## What auto-brotli is (and is not)
+
+auto-brotli **is**:
+- a simple shell script
+- incremental and idempotent
+- designed to run via cron
+
+auto-brotli is **not**:
+- a daemon
+- a file watcher
+- a WordPress plugin
+- a replacement for your cache plugin
+
+It only pre-compresses files.  
+Your webserver is responsible for serving them.
+
+---
+
+## Features
+
+- **Maximum compression**  
+  Uses Brotli quality level 11 for best compression ratio.
+
+- **Incremental operation**  
+  Only new or modified files are processed.
+
+- **Self-healing timestamps**  
+  `.br` files mirror ownership and modification times of their source files.
+
+- **Low system impact**  
+  Designed to run with `nice` and `ionice` via cron.
+
+- **Cache-cleaner friendly**  
+  Preserves file metadata so cache garbage collectors behave as expected.
+
+---
+
+## Requirements
+
+- Linux system
+- `brotli` CLI tool installed  
+  - Debian / Ubuntu: `apt install brotli`  
+  - RHEL / CentOS: `yum install brotli`
+
+---
+
+## Installation
+
+```shell
 sudo wget -O /usr/local/bin/auto-brotli.sh https://raw.githubusercontent.com/realrellek/auto-brotli/main/auto-brotli.sh
 sudo chmod +x /usr/local/bin/auto-brotli.sh
-```
+````
 
-2. Configuration:  
-   Edit the file `nano /usr/local/bin/auto-brotli.sh` and check the variables at the top:  
-   * `WEB_ROOT`: The base directory where your websites live (e.g., `/var/www` or `/var/customers/webs`).  
-   * `CACHE_PATH_PATTERN`: Default is `*/wp-content/cache/*`.
+Edit the configuration at the top of the script:
 
-## **Usage**
+* `WEB_ROOT`
+  Base directory containing your sites
+  (e.g. `/var/www` or `/var/customers/webs`)
 
-### **1. Initial Scan**
+* `CACHE_PATH_PATTERN`
+  Default: `*/wp-content/cache/*`
 
-Run the script once manually to compress all existing cache files. This might take a while depending on your cache size.
+---
 
-```
-# Run in screen or tmux if you have a huge cache  
+## Usage
+
+### Initial run
+
+Compress all existing cache files once:
+
+```shell
 sudo /usr/local/bin/auto-brotli.sh --first-run
 ```
 
-### **2. Setup Cronjob**
-
-Add the following line to your root crontab (`sudo crontab -e`). This runs the script every 10 minutes with low priority to ensure it never impacts site performance.
-```
-*/10 * * * * /usr/bin/flock -n /tmp/auto-brotli.lock /usr/bin/nice -n 19 /usr/bin/ionice -c 3 /usr/local/bin/auto-brotli.sh
-```
-* `flock`: Ensures only one instance runs at a time.  
-* `nice -n 19`: Uses lowest CPU priority.  
-* `ionice -c 3`: Uses lowest I/O priority.
-
-## **Webserver Configuration**
-
-To actually serve these files, you need to configure your webserver.
+For large caches, use `screen` or `tmux`.
 
 ---
 
-⚠️ **IMPORTANT NOTE FOR WP ROCKET & CACHING PLUGINS**
-The configurations below are generic examples. They may not be enough to make it work with WP Rocket or similar caching tools out of the box!
+### Cron setup
 
-WP Rocket, for example, uses its own complex RewriteRules in `.htaccess` (Apache) or configuration (Nginx) to bypass PHP. You may need to manually adjust those rules to check for `.br` files in addition to `.html_gzip` files. Please refer to your specific caching tool's documentation on how to serve pre-compressed custom files.
+Recommended cron job (every 10 minutes, lowest priority):
+
+```cron
+*/10 * * * * /usr/bin/flock -n /tmp/auto-brotli.lock \
+  /usr/bin/nice -n 19 \
+  /usr/bin/ionice -c 3 \
+  /usr/local/bin/auto-brotli.sh
+```
+
+This ensures:
+
+* no parallel runs
+* minimal CPU usage
+* minimal disk IO impact
 
 ---
 
-### **Nginx**
+## Webserver configuration
 
-Requires the `ngx_brotli` module. Add this to your server or location block:
-```
+### Nginx (recommended)
+
+Requires `ngx_brotli`:
+
+```nginx
 brotli_static on;
 ```
-### **Apache**
 
-Apache doesn't have a simple switch, but you can use `mod_rewrite` to check for the existence of `.br` files. Add this to your `.htaccess` or vhost config:
-```
+That’s it.
+
+---
+
+### Apache (possible, but manual)
+
+Apache has no simple equivalent to `brotli_static on`.
+You must explicitly rewrite requests to `.br` files and fix headers.
+
+Example configuration:
+
+```apache
 <IfModule mod_headers.c>
-    # Check if browser accepts br and file exists
     RewriteCond %{HTTP:Accept-Encoding} br
     RewriteCond %{REQUEST_FILENAME}\.br -s
     RewriteRule ^(.*)$ $1\.br [L,QSA]
 
-    # Force correct content-type and encoding headers
     <FilesMatch "\.br$">
         Header set Content-Encoding br
         Header append Vary Accept-Encoding
     </FilesMatch>
-    
-    # Fix MIME types (Apache might see .br as application/x-brotli otherwise)
+
     <FilesMatch "\.css\.br$">
         ForceType text/css
     </FilesMatch>
@@ -103,17 +172,47 @@ Apache doesn't have a simple switch, but you can use `mod_rewrite` to check for 
 </IfModule>
 ```
 
-## **Known Limitations**
+---
 
-* **Plugin Compatibility:** Tested primarily with **WP Rocket**. Also works with WP Fastest Cache and others that store static files on disk.  
-* **Stale Cache Edge Case:** If a caching plugin deletes *only* the source file (e.g., `index.html`) but leaves the `.br` file (rare, as most delete the folder), the webserver might serve the stale `.br` file until the cache is regenerated. With WP Rocket, this is not an issue as it clears directory-based structures.
+## Important notes for WP Rocket and other cache plugins
 
-## **Known issues**
+The webserver examples above are **generic**.
 
-If you are using **WP Rocket** and clear the home page cache, WP Rocket does **not** remove Brotli (`.br`) files when the home page cache is **not stored in a separate directory**.
-As a result, stale Brotli files may remain in place.
+Caching plugins like WP Rocket use complex rewrite rules to bypass PHP.
+You may need to adapt those rules to also check for `.br` files.
 
-You can fix this by hooking into the relevant WP Rocket action. Add the following code to your theme’s `functions.php` (or any other appropriate location, e.g. a plugin or mu-plugin):
+Refer to your caching plugin’s documentation when integrating Brotli static files.
+
+---
+
+## Known limitations
+
+* Primarily tested with **WP Rocket**
+* Works with other disk-based cache plugins
+* Edge case: if a cache file is deleted but its `.br` file remains,
+  a stale response may be served until the cache is regenerated
+
+With WP Rocket’s directory-based cache structure, this is usually not an issue.
+
+## Known WP Rocket issue: homepage Brotli files
+
+When using **WP Rocket**, clearing the homepage cache may **not remove existing
+Brotli (`.br`) files** if the homepage cache is **not stored in a separate directory**.
+
+As a result, a stale `.br` file (for example `index.html.br`) may remain in place
+and continue to be served by the webserver, even though the HTML cache was cleared.
+
+This is not specific to auto-brotli — it is a side effect of how WP Rocket handles
+homepage cache cleanup.
+
+---
+
+### Hotfix for WP Rocket homepage cleanup
+
+You can fix this by hooking into WP Rocket’s cleanup action and explicitly removing
+homepage `.br` files.
+
+Add the following code to your theme’s `functions.php`, a plugin, or a mu-plugin:
 
 ```php
 add_action( 'after_rocket_clean_home', 'rellek_wpr_remove_home_br', 10, 2 );
@@ -137,10 +236,25 @@ function rellek_wpr_remove_home_br( $root, $lang ) {
 }
 ```
 
-**Different uses**
+This ensures that stale homepage Brotli files are removed whenever the homepage
+cache is cleared.
 
-It shall be known that auto-brotli can be "abused" to brotli-fy other files too. All you would have to do is change the `WEB_ROOT` and adjust `CACHE_PATH_PATTERN`. You can use `*` as the `CACHE_PATH_PATTERN` if you have no preferences or restrictions on where to look inside `WEB_ROOT`. You can create a second copy of the script if you want both functions.
+---
 
-## **License**
+## Advanced usage
+
+auto-brotli can also be used to pre-compress **non-WordPress files**.
+
+By adjusting:
+
+* `WEB_ROOT`
+* `CACHE_PATH_PATTERN`
+
+you can brotli-compress any static directory tree.
+Multiple copies of the script can be used for different targets.
+
+---
+
+## License
 
 MIT
