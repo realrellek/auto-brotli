@@ -3,8 +3,13 @@
 # ==============================================================================
 # AUTO-BROTLI STATIC COMPRESSOR
 # ==============================================================================
+# Pre-compresses static cache files to avoid on-the-fly Brotli compression.
+#
 # Scans wp-content/cache directories for static assets (CSS, JS, HTML, XML)
 # and creates pre-compressed .br files (Brotli Level 11).
+#
+# Written because on-the-fly Brotli compression is expensive and unnecessary
+# for static caches.
 #
 # Features:
 # - Incremental: Only processes new or modified files.
